@@ -1,36 +1,85 @@
-const options = {
-	method: 'GET',
-	headers: {
-		'X-RapidAPI-Key': '3dd0ad34efmsh5b695f94dd0fbc2p12e37fjsn4dc2f5032f09',
-		'X-RapidAPI-Host': 'weather-by-api-ninjas.p.rapidapi.com'
-	}
-};
+let useFahrenheit = false;
 
-const getWeather = (city)=>{
-	cityName.innerHTML = city
-fetch('https://weather-by-api-ninjas.p.rapidapi.com/v1/weather?city='+ city, options)
-.then(response => response.json())
-.then(response => {	
-	console.log(response)
-			//cloud_pct.innerHTML = response.cloud_pct
-			temp.innerHTML = response.temp
-			temp2.innerHTML = response.temp
-			feels_like.innerHTML = response.feels_like
-			humidity.innerHTML = response.humidity
-			humidity2.innerHTML = response.humidity
-			min_temp.innerHTML = response.min_temp
-			max_temp.innerHTML = response.max_temp
-			wind_speed.innerHTML = response.wind_speed
-			wind2_speed.innerHTML = response.wind_speed
-			wind_degrees.innerHTML = response.wind_degrees
-			sunrise.innerHTML = response.sunrise
-			sunset.innerHTML = response.sunset
-		})
-	.catch(err => console.error(err));
+function toggleUnit() {
+  useFahrenheit = document.getElementById("unitToggle").checked;
+  getWeather();
 }
 
-submit.addEventListener("click", (e) => {
-	e.preventDefault()
-	getWeather(city.value)
-})
-getWeather("Kolkata");
+function toggleDarkMode() {
+  const body = document.body;
+  body.classList.toggle("dark");
+  const isDark = body.classList.contains("dark");
+  const toggleBtn = document.getElementById("themeToggle");
+  toggleBtn.textContent = isDark ? "☀️" : "🌙";
+  localStorage.setItem("theme", isDark ? "dark" : "light");
+}
+
+function cToF(c) {
+  return Math.round((parseFloat(c) * 9) / 5 + 32);
+}
+
+async function getWeather() {
+  let city = document.getElementById("cityInput").value.trim();
+  if (!city) {
+    try {
+      const position = await new Promise((resolve, reject) =>
+        navigator.geolocation.getCurrentPosition(resolve, reject)
+      );
+      const { latitude, longitude } = position.coords;
+      city = `${latitude},${longitude}`;
+    } catch {
+      alert("Location access denied. Please enter a city name.");
+      return;
+    }
+  }
+
+  const url = `https://wttr.in/${city}?format=j1`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("Fetch failed");
+    const data = await res.json();
+
+    const current = data.current_condition[0];
+    const weather = data.weather[0];
+    const astronomy = weather.astronomy[0];
+
+    const unitSymbol = useFahrenheit ? "°F" : "°C";
+    const temp = useFahrenheit ? cToF(current.temp_C) : current.temp_C;
+    const feels = useFahrenheit ? cToF(current.FeelsLikeC) : current.FeelsLikeC;
+
+    document.getElementById("temperature").textContent = `${temp}${unitSymbol}`;
+    document.getElementById("feels").textContent = `${feels}${unitSymbol}`;
+    document.getElementById("humidity").textContent = `${current.humidity}%`;
+    document.getElementById(
+      "wind"
+    ).textContent = `${current.windspeedKmph} km/h`;
+    document.getElementById("description").textContent =
+      current.weatherDesc[0].value;
+    document.getElementById("uv").textContent = current.uvIndex || "N/A";
+    document.getElementById(
+      "visibility"
+    ).textContent = `${current.visibility} km`;
+    document.getElementById("precip").textContent = `${current.precipMM} mm`;
+    document.getElementById("sunrise").textContent = astronomy.sunrise;
+    document.getElementById("sunset").textContent = astronomy.sunset;
+    document.getElementById("cloud").textContent = `${current.cloudcover}%`;
+
+    document.getElementById(
+      "location"
+    ).textContent = `Weather in ${data.nearest_area[0].areaName[0].value}`;
+    document.getElementById("result").classList.remove("hidden");
+  } catch (err) {
+    console.error("Error fetching weather:", err);
+    alert("Couldn't fetch weather data.");
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const savedTheme = localStorage.getItem("theme");
+  if (savedTheme === "dark") {
+    document.body.classList.add("dark");
+    document.getElementById("themeToggle").textContent = "☀️";
+  }
+  getWeather();
+});
