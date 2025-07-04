@@ -39,38 +39,42 @@
 
   <main class="px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto">
     <h2 id="location" class="text-3xl font-semibold text-center mb-8">Weather Overview</h2>
+
+    <div id="errorMsg" class="text-red-500 text-center mb-4 hidden">Error fetching weather.</div>
+    <div id="loading" class="text-center text-lg text-gray-600 dark:text-gray-300 hidden mb-6">Loading...</div>
+
     <div id="result" class="hidden grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">🌡️ Temperature</h3>
-        <p class="text-4xl font-bold text-center" id="temperature">--</p>
-        <p class="text-sm text-center mt-1">Feels Like: <span id="feels">--</span></p>
+        <p class="text-4xl font-bold text-center fade-value" id="temperature">--</p>
+        <p class="text-sm text-center mt-1">Feels Like: <span id="feels" class="fade-value">--</span></p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">💧 Humidity</h3>
-        <p class="text-4xl font-bold text-center" id="humidity">--</p>
-        <p class="text-sm text-center mt-1">Cloud Cover: <span id="cloud">--</span></p>
+        <p class="text-4xl font-bold text-center fade-value" id="humidity">--</p>
+        <p class="text-sm text-center mt-1">Cloud Cover: <span id="cloud" class="fade-value">--</span></p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">🌬️ Wind</h3>
-        <p class="text-4xl font-bold text-center" id="wind">--</p>
-        <p class="text-sm text-center mt-1">Precipitation: <span id="precip">--</span></p>
+        <p class="text-4xl font-bold text-center fade-value" id="wind">--</p>
+        <p class="text-sm text-center mt-1">Precipitation: <span id="precip" class="fade-value">--</span></p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">🌅 Sun Info</h3>
-        <p class="text-sm text-center">Sunrise: <span id="sunrise">--</span></p>
-        <p class="text-sm text-center">Sunset: <span id="sunset">--</span></p>
+        <p class="text-sm text-center">Sunrise: <span id="sunrise" class="fade-value">--</span></p>
+        <p class="text-sm text-center">Sunset: <span id="sunset" class="fade-value">--</span></p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">☁️ Conditions</h3>
-        <p class="text-base text-center" id="description">--</p>
+        <p class="text-base text-center fade-value" id="description">--</p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">🔆 UV Index</h3>
-        <p class="text-3xl font-bold text-center" id="uv">--</p>
+        <p class="text-3xl font-bold text-center fade-value" id="uv">--</p>
       </div>
       <div class="card rounded-xl p-5 shadow-md border border-slate-200 dark:border-slate-700">
         <h3 class="text-lg font-semibold text-center mb-2">👁️ Visibility</h3>
-        <p class="text-3xl font-bold text-center" id="visibility">--</p>
+        <p class="text-3xl font-bold text-center fade-value" id="visibility">--</p>
       </div>
     </div>
   </main>

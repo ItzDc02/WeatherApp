@@ -9,8 +9,7 @@ function toggleDarkMode() {
   const body = document.body;
   body.classList.toggle("dark");
   const isDark = body.classList.contains("dark");
-  const toggleBtn = document.getElementById("themeToggle");
-  toggleBtn.textContent = isDark ? "☀️" : "🌙";
+  document.getElementById("themeToggle").textContent = isDark ? "☀️" : "🌙";
   localStorage.setItem("theme", isDark ? "dark" : "light");
 }
 
@@ -19,6 +18,11 @@ function cToF(c) {
 }
 
 async function getWeather() {
+  const loading = document.getElementById("loading");
+  const errorMsg = document.getElementById("errorMsg");
+  loading.classList.remove("hidden");
+  errorMsg.classList.add("hidden");
+
   let city = document.getElementById("cityInput").value.trim();
   if (!city) {
     try {
@@ -28,7 +32,9 @@ async function getWeather() {
       const { latitude, longitude } = position.coords;
       city = `${latitude},${longitude}`;
     } catch {
-      alert("Location access denied. Please enter a city name.");
+      errorMsg.textContent = "Location access denied. Please enter a city.";
+      errorMsg.classList.remove("hidden");
+      loading.classList.add("hidden");
       return;
     }
   }
@@ -48,31 +54,37 @@ async function getWeather() {
     const temp = useFahrenheit ? cToF(current.temp_C) : current.temp_C;
     const feels = useFahrenheit ? cToF(current.FeelsLikeC) : current.FeelsLikeC;
 
-    document.getElementById("temperature").textContent = `${temp}${unitSymbol}`;
-    document.getElementById("feels").textContent = `${feels}${unitSymbol}`;
-    document.getElementById("humidity").textContent = `${current.humidity}%`;
-    document.getElementById(
-      "wind"
-    ).textContent = `${current.windspeedKmph} km/h`;
-    document.getElementById("description").textContent =
-      current.weatherDesc[0].value;
-    document.getElementById("uv").textContent = current.uvIndex || "N/A";
-    document.getElementById(
-      "visibility"
-    ).textContent = `${current.visibility} km`;
-    document.getElementById("precip").textContent = `${current.precipMM} mm`;
-    document.getElementById("sunrise").textContent = astronomy.sunrise;
-    document.getElementById("sunset").textContent = astronomy.sunset;
-    document.getElementById("cloud").textContent = `${current.cloudcover}%`;
+    updateText("temperature", `${temp}${unitSymbol}`);
+    updateText("feels", `${feels}${unitSymbol}`);
+    updateText("humidity", `${current.humidity}%`);
+    updateText("wind", `${current.windspeedKmph} km/h`);
+    updateText("description", current.weatherDesc[0].value);
+    updateText("uv", current.uvIndex || "N/A");
+    updateText("visibility", `${current.visibility} km`);
+    updateText("precip", `${current.precipMM} mm`);
+    updateText("sunrise", astronomy.sunrise);
+    updateText("sunset", astronomy.sunset);
+    updateText("cloud", `${current.cloudcover}%`);
 
     document.getElementById(
       "location"
     ).textContent = `Weather in ${data.nearest_area[0].areaName[0].value}`;
     document.getElementById("result").classList.remove("hidden");
   } catch (err) {
-    console.error("Error fetching weather:", err);
-    alert("Couldn't fetch weather data.");
+    errorMsg.textContent = "Couldn't fetch weather data.";
+    errorMsg.classList.remove("hidden");
+  } finally {
+    loading.classList.add("hidden");
   }
+}
+
+function updateText(id, text) {
+  const el = document.getElementById(id);
+  el.classList.remove("show");
+  setTimeout(() => {
+    el.textContent = text;
+    el.classList.add("show");
+  }, 100);
 }
 
 window.addEventListener("DOMContentLoaded", () => {

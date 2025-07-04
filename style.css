@@ -44,3 +44,12 @@ body.dark .card {
   background-color: #1e293b;
   color: #e2e8f0;
 }
+
+.fade-value {
+  transition: all 0.3s ease;
+  opacity: 0.5;
+}
+
+.fade-value.show {
+  opacity: 1;
+}

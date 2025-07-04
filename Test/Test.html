@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Smart Weather App</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class'
+        };
+    </script>
+
+    <!-- Leaflet -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <!-- Weather Icons -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons.min.css" />
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/weather-icons/2.0.12/css/weather-icons-wind.min.css" />
+
+    <!-- Custom Styles -->
+    <style>
+        body.sunny {
+            background: linear-gradient(to bottom, #a3dfff, #eafcff);
+        }
+
+        body.cloudy {
+            background: linear-gradient(to bottom, #cfd9de, #e2ebef);
+        }
+
+        body.rainy {
+            background: linear-gradient(to bottom, #a1a7ab, #d0d4d8);
+        }
+
+        body.snowy {
+            background: linear-gradient(to bottom, #e8e8e8, #f5f5f5);
+        }
+
+        body.storm {
+            background: linear-gradient(to bottom, #8a8aab, #c2c2d6);
+        }
+
+        body {
+            transition: background 0.5s ease;
+        }
+    </style>
+
+    <script>
+        try {
+            if (localStorage.getItem('theme') === 'dark') {
+                document.documentElement.classList.add('dark');
+            }
+        } catch (e) { }
+    </script>
+</head>
+
+<body class="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+    <div class="flex flex-col md:flex-row h-full overflow-hidden">
+
+        <!-- Weather Section -->
+        <section class="flex-1 p-4 overflow-y-auto">
+            <header class="flex justify-between items-center mb-4 flex-wrap gap-2">
+                <h1 id="locationName" class="text-xl font-bold">Select a location</h1>
+                <div class="flex gap-2 flex-wrap">
+                    <button id="unitToggle" class="px-3 py-1 text-sm border rounded"> °C / °F </button>
+                    <button id="themeToggle" class="px-3 py-1 text-sm border rounded"> Light/Dark </button>
+                    <button id="showMapBtn" class="px-3 py-1 text-sm border rounded md:hidden"> Map </button>
+                </div>
+            </header>
+
+            <div class="flex items-center gap-4 mb-6">
+                <div id="currentIcon" class="text-6xl"></div>
+                <div>
+                    <div id="currentTemp" class="text-4xl font-bold">--°</div>
+                    <div id="currentDesc" class="text-sm capitalize text-gray-700 dark:text-gray-300">--</div>
+                </div>
+            </div>
+
+            <!-- Hourly Forecast -->
+            <section class="mb-6">
+                <h2 class="text-lg font-semibold mb-2">Today</h2>
+                <div id="hourlyForecast" class="flex overflow-x-auto gap-4 pb-2"></div>
+            </section>
+
+            <!-- 3-Day Forecast -->
+            <section>
+                <h2 class="text-lg font-semibold mb-2">3-Day Forecast</h2>
+                <div id="dailyForecast" class="flex overflow-x-auto gap-4 pb-2"></div>
+            </section>
+
+            <!-- Loading Spinner -->
+            <div id="loadingOverlay"
+                class="hidden absolute inset-0 bg-white/75 dark:bg-black/75 flex items-center justify-center z-50">
+                <div class="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+        </section>
+
+        <!-- Map Section -->
+        <aside id="mapContainer" class="md:w-1/2 h-[400px] md:h-auto md:block hidden relative">
+            <div id="map" class="w-full h-full"></div>
+            <button id="closeMapBtn"
+                class="absolute top-2 right-2 bg-gray-700 text-white text-sm px-2 py-1 rounded md:hidden hidden">Close</button>
+            <div class="absolute top-2 left-2 right-16 md:right-2 z-10 flex">
+                <input id="searchInput" type="text" placeholder="Search city..."
+                    class="flex-1 px-2 py-1 rounded-l shadow text-gray-800" />
+                <button id="searchBtn" class="px-3 py-1 bg-blue-600 text-white rounded-r">Search</button>
+            </div>
+        </aside>
+    </div>
+    <!-- Main JavaScript -->
+    <script>
+        // State variables
+        let unit = localStorage.getItem('unit') || 'C';  // 'C' or 'F'
+        let currentCoords = null;
+        // Elements
+        const locationNameEl = document.getElementById('locationName');
+        const currentIconEl = document.getElementById('currentIcon');
+        const currentTempEl = document.getElementById('currentTemp');
+        const currentDescEl = document.getElementById('currentDesc');
+        const hourlyForecastEl = document.getElementById('hourlyForecast');
+        const dailyForecastEl = document.getElementById('dailyForecast');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        // Buttons
+        const unitToggle = document.getElementById('unitToggle');
+        const themeToggle = document.getElementById('themeToggle');
+        const showMapBtn = document.getElementById('showMapBtn');
+        const closeMapBtn = document.getElementById('closeMapBtn');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        // Map and Marker
+        let map, marker;
+
+        // Initialize Leaflet map
+        function initMap() {
+            map = L.map('map').setView([20, 0], 2);  // initial view (world)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }).addTo(map);
+            // Marker (draggable for user to fine-tune position)
+            marker = L.marker([0, 0], { draggable: true }).addTo(map);
+            marker.on('dragend', () => {
+                const pos = marker.getLatLng();
+                fetchWeather(pos.lat, pos.lng);
+            });
+            // Map click to move marker and fetch weather
+            map.on('click', (e) => {
+                marker.setLatLng(e.latlng);
+                fetchWeather(e.latlng.lat, e.latlng.lng);
+            });
+        }
+
+        // Fetch weather data from Open-Meteo API for given latitude and longitude
+        async function fetchWeather(lat, lon) {
+            currentCoords = { lat, lon };
+            showLoading(true);
+            try {
+                // Build Open-Meteo API URL (3 days forecast, hourly for today):contentReference[oaicite:7]{index=7}:contentReference[oaicite:8]{index=8}
+                const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+                    + `&current_weather=true&hourly=temperature_2m,weathercode&daily=temperature_2m_max,temperature_2m_min,weathercode,sunrise,sunset`
+                    + `&forecast_days=3&timezone=auto`;
+                const res = await fetch(url);
+                const data = await res.json();
+                // Update location name via reverse geocoding or set generic coordinates
+                updateLocationName(lat, lon);
+                // Parse current weather
+                if (data.current_weather) {
+                    const cw = data.current_weather;
+                    const tempC = cw.temperature;
+                    const code = cw.weathercode;
+                    const isDay = cw.is_day;  // 1 = day, 0 = night
+                    updateCurrentWeather(tempC, code, isDay);
+                }
+                // Parse daily forecast
+                if (data.daily) {
+                    updateDailyForecast(data.daily);
+                }
+                // Parse hourly forecast (only for today)
+                if (data.hourly) {
+                    updateHourlyForecast(data.hourly, data.current_weather ? data.current_weather.time : null, data.daily);
+                }
+            } catch (err) {
+                console.error('Weather fetch error:', err);
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Update current weather section (temperature, description, icon)
+        function updateCurrentWeather(tempC, weatherCode, isDay) {
+            // Convert temperature to selected unit
+            const temp = unit === 'C' ? tempC : (tempC * 9 / 5 + 32);
+            currentTempEl.textContent = Math.round(temp) + '°' + unit;
+            // Determine basic description from weather code
+            const desc = weatherCodeToDesc(weatherCode);
+            currentDescEl.textContent = desc;
+            // Set appropriate icon class
+            const iconClass = weatherCodeToIcon(weatherCode, isDay ? 'day' : 'night');
+            currentIconEl.innerHTML = `<i class="wi ${iconClass}"></i>`;
+            // Optionally colorize the icon for day/night or condition
+            if (iconClass.includes('day-sunny') || iconClass.includes('clear')) {
+                currentIconEl.classList.add('text-yellow-500');
+            } else if (iconClass.includes('cloud') || iconClass.includes('fog')) {
+                currentIconEl.classList.add('text-gray-500');
+            } else if (iconClass.includes('rain') || iconClass.includes('sprinkle')) {
+                currentIconEl.classList.add('text-blue-500');
+            } else if (iconClass.includes('snow')) {
+                currentIconEl.classList.add('text-blue-400');
+            } else if (iconClass.includes('thunder') || iconClass.includes('storm')) {
+                currentIconEl.classList.add('text-purple-500');
+            }
+            // Update animated background based on general weather category
+            setBodyBackground(weatherCode);
+        }
+
+        // Update daily forecast cards
+        function updateDailyForecast(dailyData) {
+            dailyForecastEl.innerHTML = '';  // clear previous
+            const dates = dailyData.time;
+            const maxTemps = dailyData.temperature_2m_max;
+            const minTemps = dailyData.temperature_2m_min;
+            const codes = dailyData.weathercode;
+            // Iterate through the first 3 days (should be 3 given forecast_days=3)
+            dates.forEach((dateStr, index) => {
+                if (index >= 3) return;  // only use 3 days
+                // Determine day label: Today, Tomorrow, or weekday
+                let label;
+                if (index === 0) {
+                    label = 'Today';
+                } else if (index === 1) {
+                    label = 'Tomorrow';
+                } else {
+                    // For day 3, get weekday name
+                    const dayIndex = new Date(dateStr + 'T00:00').getDay();  // might interpret in UTC
+                    const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                    label = weekdays[dayIndex];
+                }
+                const code = codes[index];
+                // Use day icons for forecast (assuming daytime conditions for simplicity)
+                const iconClass = weatherCodeToIcon(code, 'day');
+                // Temperature (convert if needed)
+                const maxTempC = maxTemps[index], minTempC = minTemps[index];
+                const maxTemp = unit === 'C' ? maxTempC : (maxTempC * 9 / 5 + 32);
+                const minTemp = unit === 'C' ? minTempC : (minTempC * 9 / 5 + 32);
+                // Create card element
+                const card = document.createElement('div');
+                card.className = "flex-shrink-0 bg-white dark:bg-gray-800 rounded-lg shadow px-3 py-2";
+                card.innerHTML = `
+          <div class="text-sm font-semibold mb-1">${label}</div>
+          <div class="text-2xl mb-1"><i class="wi ${iconClass}"></i></div>
+          <div class="text-sm">${Math.round(maxTemp)}°${unit} / <span class="text-gray-500 dark:text-gray-400">${Math.round(minTemp)}°${unit}</span></div>
+        `;
+                dailyForecastEl.appendChild(card);
+            });
+        }
+
+        // Update hourly forecast for current day
+        function updateHourlyForecast(hourlyData, currentTimeIso, dailyData) {
+            hourlyForecastEl.innerHTML = '';  // clear previous
+            const times = hourlyData.time;
+            const temps = hourlyData.temperature_2m;
+            const codes = hourlyData.weathercode;
+            // Determine today's date (the first daily date)
+            const todayDate = dailyData.time[0];
+            // Determine current hour index to start from (so we don't show past hours)
+            let startIndex = 0;
+            if (currentTimeIso) {
+                // current_time is like "2025-07-02T14:00"
+                startIndex = times.indexOf(currentTimeIso.slice(0, 13) + ":00");  // match hour
+                if (startIndex < 0) startIndex = 0;
+            }
+            // Loop through hourly data of today
+            for (let i = startIndex; i < times.length; i++) {
+                if (!times[i].startsWith(todayDate)) break;  // stop when date changes
+                const timeStr = times[i]; // e.g. "2025-07-02T15:00"
+                const hourLabel = timeStr.slice(11, 16); // "15:00" (hour:minute)
+                const code = codes[i];
+                // Determine if this hour is day or night (check against sunrise/sunset if available)
+                let isDay = true;
+                if (dailyData.sunrise && dailyData.sunset) {
+                    const sunrise = new Date(dailyData.sunrise[0]);
+                    const sunset = new Date(dailyData.sunset[0]);
+                    const hourDate = new Date(timeStr);
+                    if (hourDate < sunrise || hourDate >= sunset) {
+                        isDay = false;
+                    }
+                }
+                const iconClass = weatherCodeToIcon(code, isDay ? 'day' : 'night');
+                const tempC = temps[i];
+                const tempVal = unit === 'C' ? tempC : (tempC * 9 / 5 + 32);
+                // Create hour block
+                const block = document.createElement('div');
+                block.className = "flex-shrink-0 text-center w-16";
+                block.innerHTML = `
+          <div class="text-xs mb-1">${hourLabel}</div>
+          <div class="text-xl mb-1"><i class="wi ${iconClass}"></i></div>
+          <div class="text-sm font-medium">${Math.round(tempVal)}°${unit}</div>
+        `;
+                hourlyForecastEl.appendChild(block);
+            }
+        }
+
+        // Show or hide the loading spinner overlay
+        function showLoading(show) {
+            if (show) {
+                loadingOverlay.classList.remove('hidden');
+            } else {
+                // Add a slight delay to allow CSS transition (if any) to finish
+                setTimeout(() => loadingOverlay.classList.add('hidden'), 200);
+            }
+        }
+
+        // Map Open-Meteo weather code to a descriptive text
+        function weatherCodeToDesc(code) {
+            // Basic mapping of codes to descriptions
+            if (code === 0) return 'clear sky';
+            if (code === 1) return 'mostly sunny';
+            if (code === 2) return 'partly cloudy';
+            if (code === 3) return 'overcast';
+            if (code >= 45 && code < 50) return 'foggy';
+            if (code >= 51 && code <= 57) return 'drizzle';
+            if (code >= 61 && code <= 67) return 'rainy';
+            if (code >= 71 && code <= 77) return 'snowy';
+            if (code >= 80 && code <= 82) return 'rain showers';
+            if (code === 85 || code === 86) return 'snow showers';
+            if (code >= 95) return 'thunderstorm';
+            return 'weather';
+        }
+
+        // Map Open-Meteo weather code to Weather Icons class (using OWM icon mapping):contentReference[oaicite:9]{index=9}
+        function weatherCodeToIcon(code, dayNight) {
+            // Use OpenWeatherMap condition codes via Weather Icons
+            let owmCode;  // corresponding OpenWeatherMap weather ID
+            switch (true) {
+                case (code === 0):          // Clear sky
+                    owmCode = 800; break;
+                case (code === 1):          // Mainly clear
+                    owmCode = 801; break;
+                case (code === 2):          // Partly cloudy
+                    owmCode = 802; break;
+                case (code === 3):          // Overcast
+                    owmCode = 804; break;
+                case (code === 45 || code === 48): // Fog
+                    owmCode = 741; break;
+                case (code >= 51 && code <= 55):   // Drizzle
+                    owmCode = 301; break;
+                case (code === 56 || code === 57): // Freezing drizzle
+                    owmCode = 311; break;
+                case (code === 61):        // Light rain
+                    owmCode = 500; break;
+                case (code === 63):        // Moderate rain
+                    owmCode = 501; break;
+                case (code === 65):        // Heavy rain
+                    owmCode = 502; break;
+                case (code === 66 || code === 67): // Freezing rain
+                    owmCode = 511; break;
+                case (code === 71):        // Light snow
+                    owmCode = 600; break;
+                case (code === 73):        // Moderate snow
+                    owmCode = 601; break;
+                case (code === 75):        // Heavy snow
+                    owmCode = 602; break;
+                case (code === 77):        // Snow grains
+                    owmCode = 612; break;
+                case (code === 80):        // Rain showers (light)
+                    owmCode = 520; break;
+                case (code === 81):        // Rain showers (moderate)
+                    owmCode = 521; break;
+                case (code === 82):        // Rain showers (violent)
+                    owmCode = 522; break;
+                case (code === 85):        // Snow showers (light)
+                    owmCode = 620; break;
+                case (code === 86):        // Snow showers (heavy)
+                    owmCode = 622; break;
+                case (code >= 95 && code <= 99): // Thunderstorms
+                    owmCode = 200; break;
+                default:
+                    owmCode = 800;
+            }
+            // Compose the class name. Use day/night prefix for certain codes if available.
+            let iconClass = `wi-owm-${owmCode}`;
+            // For clear sky or clouds, use explicit day/night variants:
+            if (owmCode === 800) {
+                iconClass = (dayNight === 'day') ? 'wi-owm-day-800' : 'wi-owm-night-800';
+            } else if (owmCode >= 801 && owmCode <= 804) {
+                iconClass = (dayNight === 'day') ? `wi-owm-day-${owmCode}` : `wi-owm-night-${owmCode}`;
+            } else if (owmCode === 741) {
+                // Fog: day/night variants available as day-fog, night-fog
+                iconClass = (dayNight === 'day') ? 'wi-day-fog' : 'wi-night-fog';
+            } else if (String(owmCode).startsWith('6') && dayNight) {
+                // Snow icons - Weather Icons has day-snow for 600 etc.
+                iconClass = (dayNight === 'day') ? `wi-owm-day-${owmCode}` : `wi-owm-night-${owmCode}`;
+            } else if (String(owmCode).startsWith('5') && dayNight) {
+                // Rain icons - day/night variants exist for many rain codes
+                iconClass = (dayNight === 'day') ? `wi-owm-day-${owmCode}` : `wi-owm-night-${owmCode}`;
+            } else if (String(owmCode).startsWith('3') && dayNight) {
+                // Drizzle as rain variants
+                iconClass = (dayNight === 'day') ? `wi-owm-day-${owmCode}` : `wi-owm-night-${owmCode}`;
+            } else if (String(owmCode).startsWith('2') && dayNight) {
+                // Thunderstorms day/night
+                iconClass = (dayNight === 'day') ? `wi-owm-day-${owmCode}` : `wi-owm-night-${owmCode}`;
+            }
+            return iconClass;
+        }
+
+        // Change body class for background based on weather code category
+        function setBodyBackground(code) {
+            document.body.classList.remove('sunny', 'cloudy', 'rainy', 'snowy', 'storm');
+            if (code === 0 || code === 1) {
+                document.body.classList.add('sunny');
+            } else if (code === 2 || code === 3 || (code >= 45 && code < 50)) {
+                document.body.classList.add('cloudy');
+            } else if ((code >= 51 && code <= 67) || (code >= 80 && code <= 82)) {
+                document.body.classList.add('rainy');
+            } else if ((code >= 71 && code <= 77) || code === 85 || code === 86) {
+                document.body.classList.add('snowy');
+            } else if (code >= 95) {
+                document.body.classList.add('storm');
+            }
+        }
+
+        // Update the displayed location name. Use reverse geocoding for coordinates.
+        async function updateLocationName(lat, lon) {
+            try {
+                // Use Nominatim reverse geocoding (no API key) to get a human-readable location
+                const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+                const geoData = await res.json();
+                if (geoData && geoData.display_name) {
+                    // Use city and country from display_name if possible (to keep it short)
+                    const nameParts = geoData.display_name.split(',');
+                    let cityName = nameParts[0];
+                    if (nameParts.length > 1 && cityName.match(/\d/)) {
+                        // if first part is a street address or number, use second part
+                        cityName = nameParts[1];
+                    }
+                    locationNameEl.textContent = cityName.trim();
+                } else {
+                    locationNameEl.textContent = `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`;
+                }
+            } catch (e) {
+                locationNameEl.textContent = `Lat ${lat.toFixed(2)}, Lon ${lon.toFixed(2)}`;
+            }
+        }
+
+        // Event: Toggle temperature unit
+        unitToggle.addEventListener('click', () => {
+            unit = (unit === 'C') ? 'F' : 'C';
+            localStorage.setItem('unit', unit);
+            unitToggle.textContent = unit === 'C' ? '°C / °F' : '°F / °C';
+            // Re-render temperatures with new unit
+            // We can simply re-fetch the last known data if available or convert displayed values
+            if (currentCoords) {
+                // Instead of re-calling API, just update UI from stored data if we saved it, 
+                // but for simplicity we call fetchWeather again to get precise values in desired unit.
+                // (Open-Meteo API supports &temperature_unit=, but we're converting manually here.)
+                fetchWeather(currentCoords.lat, currentCoords.lon);
+            }
+        });
+
+        // Event: Toggle light/dark theme
+        themeToggle.addEventListener('click', () => {
+            const htmlEl = document.documentElement;
+            if (htmlEl.classList.contains('dark')) {
+                htmlEl.classList.remove('dark');
+                localStorage.setItem('theme', 'light');
+            } else {
+                htmlEl.classList.add('dark');
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+
+        // Event: Show map (for mobile)
+        showMapBtn.addEventListener('click', () => {
+            mapContainer.classList.remove('hidden');
+            // Make map fullscreen on mobile
+            mapContainer.classList.add('fixed', 'inset-0', 'z-50');
+            closeMapBtn.classList.remove('hidden');
+            // Invalidate map size to ensure it renders correctly after being unhidden
+            setTimeout(() => { map.invalidateSize(); }, 100);
+        });
+        // Event: Close map (mobile)
+        closeMapBtn.addEventListener('click', () => {
+            mapContainer.classList.add('hidden');
+            mapContainer.classList.remove('fixed', 'inset-0', 'z-50');
+            closeMapBtn.classList.add('hidden');
+        });
+
+        // Event: Search city by name
+        searchBtn.addEventListener('click', () => {
+            const query = searchInput.value.trim();
+            if (!query) return;
+            // Use Nominatim search API
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1`)
+                .then(res => res.json())
+                .then(results => {
+                    if (results && results[0]) {
+                        const { lat, lon, display_name } = results[0];
+                        // Update map view and marker
+                        const latitude = parseFloat(lat), longitude = parseFloat(lon);
+                        map.setView([latitude, longitude], 10);
+                        marker.setLatLng([latitude, longitude]);
+                        // Fetch weather for new location
+                        fetchWeather(latitude, longitude);
+                        // Update location name directly from result (to avoid waiting for reverse)
+                        locationNameEl.textContent = display_name.split(',')[0];
+                    }
+                })
+                .catch(err => console.error('Geocoding error:', err));
+        });
+
+        // Initialize everything on page load
+        initMap();
+        // Apply saved unit preference to button label
+        if (unit === 'F') {
+            unitToggle.textContent = '°F / °C';
+        }
+        // Attempt geolocation to auto-detect location
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                pos => {
+                    const lat = pos.coords.latitude;
+                    const lon = pos.coords.longitude;
+                    // Center map and marker on detected location
+                    map.setView([lat, lon], 10);
+                    marker.setLatLng([lat, lon]);
+                    // Fetch weather for current location
+                    fetchWeather(lat, lon);
+                },
+                err => {
+                    console.warn('Geolocation declined or unavailable.', err);
+                    // If geolocation fails, user can search manually; we could set a default location here if desired.
+                }
+            );
+        }
+    </script>
+</body>
+
+</html>
